@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PRO-BOT | Session Summary</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * { box-sizing: border-box; font-family: 'Poppins', sans-serif; margin: 0; padding: 0; }
+
+    body {
+      background: #f8fafc url("{{ url_for('static', filename='classroom1.png') }}") no-repeat center center fixed;
+      background-size: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 30px;
+    }
+
+    .overlay {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      padding: 40px 30px;
+      text-align: center;
+      width: 100%;
+      max-width: 700px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      color: #065084;
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    p.subtitle {
+      color: #333;
+      font-size: 1rem;
+      margin-bottom: 30px;
+    }
+
+    /* --- this section locks the chart size --- */
+    .chart-wrapper {
+      width: 100%;
+      max-width: 600px;
+      height: 320px;
+      margin-bottom: 25px;
+      position: relative;
+    }
+    .chart-wrapper canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    /* --- end chart lock --- */
+
+    table {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 20px auto;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+
+    th { background-color: #e3f2fd; color: #065084; font-weight: 600; }
+    td { color: #333; }
+
+    .btn {
+      background: #0F828C;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-block;
+      transition: all 0.2s ease;
+    }
+    .btn:hover { background: #065084; transform: translateY(-2px); }
+
+    .error {
+      color: #a00;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="overlay" id="pageData"
+       data-averages='{{ (averages if averages is defined else {}) | tojson | safe }}'>
+    <h1>Session Summary</h1>
+    <p class="subtitle">Average emotional distribution of students during the session</p>
+
+    <div class="chart-wrapper">
+      <canvas id="summaryChart"></canvas>
+    </div>
+
+    <table id="summaryTable"></table>
+
+    <a href="/" class="btn">⬅ Back to Home</a>
+
+    <div id="errorBox" class="error" style="display:none;"></div>
+  </div>
+
+  <script>
+    (function(){
+      try {
+        const container = document.getElementById('pageData');
+        const raw = container.getAttribute('data-averages') || '{}';
+        let averages = {};
+        try { averages = JSON.parse(raw); } catch { averages = {}; }
+
+        const keys = ['Engaged', 'Confused', 'Bored/Frustrated'];
+        const cleaned = {};
+        keys.forEach(k => {
+          const val = (averages && typeof averages[k] === 'number') ? averages[k] : 0;
+          cleaned[k] = (isFinite(val) && val >= 0) ? val : 0;
+        });
+
+        const ctx = document.getElementById('summaryChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: keys,
+            datasets: [{
+              label: 'Average (%)',
+              data: keys.map(k => cleaned[k]),
+              backgroundColor: [
+                'rgba(102, 187, 106, 0.6)',
+                'rgba(255, 241, 118, 0.6)',
+                'rgba(255, 138, 128, 0.6)'
+              ],
+              borderColor: [
+                'rgba(102, 187, 106, 1)',
+                'rgba(255, 241, 118, 1)',
+                'rgba(255, 138, 128, 1)'
+              ],
+              borderWidth: 1
+            }]
+          },
+          options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: { stepSize: 10 },
+                title: { display: true, text: 'Percentage (%)' }
+              }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+
+        const table = document.getElementById('summaryTable');
+        table.innerHTML = `
+          <thead>
+            <tr><th>Emotion</th><th>Percentage</th></tr>
+          </thead>
+          <tbody>
+            ${keys.map(k => `<tr><td>${k}</td><td>${cleaned[k].toFixed(2)}%</td></tr>`).join('')}
+          </tbody>
+        `;
+
+      } catch (err) {
+        const box = document.getElementById('errorBox');
+        box.style.display = 'block';
+        box.textContent = 'Rendering error: ' + err.message;
+        console.error(err);
+      }
+    })();
+  </script>
+</body>
+</html>

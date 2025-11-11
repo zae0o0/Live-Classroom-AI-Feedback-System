@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRO-BOT | Live Classroom Feedback AI</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    @font-face {
+  font-family: 'Milkyway';
+  src: url("{{ url_for('static', filename='fonts/Milkyway DEMO.ttf') }}") format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  }
+
+    :root {
+      --primary-bg: #f4f7fb;
+      --text-color: #333;
+      --header-color: #065084;
+      --button-bg: #0F828C;
+      --button-hover-bg: #065084;
+      --card-bg: #ffffff;
+      --border-color: #e0e0e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Poppins", sans-serif; }
+    body {
+      background: #f8fafc url("{{ url_for('static', filename='classroom.png') }}") no-repeat center center fixed;
+      background-size: cover;
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+    header { text-align: center; margin-bottom: 30px; }
+    h1 { font-family: 'Milkyway', 'Poppins', sans-serif;
+  font-size: 4.5rem;
+  color:#065058;
+  margin-bottom: 5px;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.1);}
+    p.subtitle { font-size: 1.1rem; color: #282727; max-width: 700px; }
+
+    .controls { margin-bottom: 30px; }
+    .btn {
+      background: var(--button-bg);
+      color: #fff;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+      margin: 0 10px;
+    }
+    .btn:hover { background: var(--button-hover-bg); transform: translateY(-2px); }
+
+    .content-wrapper {
+        display: none;
+        flex-direction: row;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 30px;
+        width: 100%;
+        max-width: 1400px;
+        flex-wrap: wrap;
+    }
+    .video-container, .dashboard-container {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid var(--border-color);
+        flex: 2;
+        min-width: 500px;
+    }
+    .dashboard-container { flex: 1; min-width: 350px; }
+    h2 { font-size: 1.5rem; color: var(--header-color); margin-bottom: 20px; text-align: center; }
+    #videoStream { width: 100%; border-radius: 8px; background-color: #000; }
+    #studentCount { text-align: center; font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>PRO-BOT</h1>
+    <p class="subtitle">A Live AI System for Classroom Engagement Feedback</p>
+  </header>
+
+  <div class="controls">
+    <button class="btn" id="startSession">📷 Start Session</button>
+    <button class="btn" id="stopSession" style="display:none;">⛔ Stop Session</button>
+  </div>
+  
+  <main class="content-wrapper" id="contentWrapper">
+      <div class="video-container">
+        <h2>Live Camera Feed</h2>
+        <!-- preload a dummy source to show the border box -->
+        <img id="videoStream" src="{{ url_for('video_feed') }}" alt="Video Stream" />
+      </div>
+      <div class="dashboard-container">
+        <h2>Real-Time Engagement</h2>
+        <p id="studentCount">Students Detected: 0</p>
+        <canvas id="emotionChart"></canvas>
+      </div>
+  </main>
+
+  <script>
+    const startBtn = document.getElementById("startSession");
+    const stopBtn = document.getElementById("stopSession");
+    const videoStream = document.getElementById("videoStream");
+    const contentWrapper = document.getElementById("contentWrapper");
+    const studentCountEl = document.getElementById("studentCount");
+    const chartCanvas = document.getElementById("emotionChart").getContext('2d');
+
+    let emotionChart;
+    let dataFetchInterval;
+
+    const chartConfig = {
+        type: 'bar',
+        data: {
+            labels: ['Engaged', 'Confused', 'Bored/Frustrated'],
+            datasets: [{
+                label: 'Number of Students',
+                data: [0, 0, 0],
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(255, 99, 132, 0.6)'
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+            plugins: { legend: { display: false } },
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    };
+
+    async function updateDashboard() {
+        try {
+            const response = await fetch('/data');
+            if (!response.ok) throw new Error("Server response not OK");
+            
+            const detections = await response.json();
+            studentCountEl.textContent = `Students Detected: ${detections.length}`;
+
+            const emotionCounts = { 'Engaged': 0, 'Confused': 0, 'Bored/Frustrated': 0 };
+            detections.forEach(d => {
+                if (d.emotion in emotionCounts) emotionCounts[d.emotion]++;
+            });
+
+            emotionChart.data.datasets[0].data = [
+                emotionCounts['Engaged'],
+                emotionCounts['Confused'],
+                emotionCounts['Bored/Frustrated']
+            ];
+            emotionChart.update();
+        } catch (error) {
+            console.error("Error updating dashboard:", error);
+        }
+    }
+
+    async function startSession() {
+        await fetch('/start_session'); 
+        // give backend half a second to start streaming frames
+        setTimeout(() => {
+          videoStream.src = "/video_feed?cache=" + new Date().getTime();
+        }, 500);
+
+        contentWrapper.style.display = "flex";
+        startBtn.style.display = "none";
+        stopBtn.style.display = "inline-block";
+
+        if (emotionChart) emotionChart.destroy();
+        emotionChart = new Chart(chartCanvas, chartConfig);
+        dataFetchInterval = setInterval(updateDashboard, 1000);
+    }
+
+    async function stopSession() {
+        clearInterval(dataFetchInterval);
+        videoStream.src = "";
+        contentWrapper.style.display = "none";
+        stopBtn.style.display = "none";
+        startBtn.style.display = "inline-block";
+        studentCountEl.textContent = 'Students Detected: 0';
+
+        await fetch('/stop_session');
+        window.location.href = "/summary";
+    }
+
+    startBtn.addEventListener("click", startSession);
+    stopBtn.addEventListener("click", stopSession);
+  </script>
+</body>
+</html>
