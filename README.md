@@ -15,6 +15,4 @@ It classifies live webcam faces into four engagement states:
 
 ## 🧠 Tech Stack
 - Python
-- PyTorch
 - OpenCV
-- Torchvision
